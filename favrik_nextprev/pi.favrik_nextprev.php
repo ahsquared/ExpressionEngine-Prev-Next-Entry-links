@@ -14,7 +14,7 @@
  */
  
 $plugin_info = array(   'pi_name'           => 'EE2 favrik Next/Prev entry linking',
-                        'pi_version'        => '1.0.1',
+                        'pi_version'        => '1.0.2',
                         'pi_author'         => 'Favrik',
                         'pi_author_url'     => 'https://github.com/favrik/ExpressionEngine-Prev-Next-Entry-links',
                         'pi_description'    => 'Outputs next/prev entry links',
@@ -125,9 +125,10 @@ Class Favrik_nextprev
             return '';
         }
 
-        $sql = 'SELECT t.entry_id, t.title, t.url_title, t.entry_date, w.channel_name
+        $sql = 'SELECT t.entry_id, t.title, t.url_title, t.entry_date, w.channel_name, t.author_id, m.screen_name
                 FROM (exp_channel_titles AS t)
-                LEFT JOIN exp_channels AS w ON w.channel_id = t.channel_id ';
+                LEFT JOIN exp_channels AS w ON w.channel_id = t.channel_id
+                LEFT JOIN exp_members AS m ON m.member_id = t.author_id';
 		
 		// If a category ID is present, limit next/prev
         //    to just entries within this category
@@ -186,13 +187,13 @@ Class Favrik_nextprev
     {
         $query = $entry;
 
-
+        // TODO fix this check
         // Check if date is in the future!
-        $now_localized        = $this->EE->localize->set_localized_time();
-        $entry_date_localized = $this->EE->localize->set_localized_time($query->row('entry_date'));
+        $now_localized        = $this->EE->localize->now;
+        $entry_date_localized = $this->EE->localize->format_date('%U',$query->row('entry_date'), TRUE);
         if ($entry_date_localized > $now_localized)
         {
-            return ''; // Empty content
+           return ''; // Empty content
         }
 
 
@@ -213,13 +214,15 @@ Class Favrik_nextprev
               preg_match_all("/".LD.'entry_date'."\s+format=([\"'])([^\\1]*?)\\1".RD."/s", $this->EE->TMPL->tagdata, $matches)
         )
         {
+            //var_dump($matches);
             for ($j = 0; $j < count($matches[0]); $j++)
             {
-                $matches[0][$j] = str_replace(array(LD,RD), '', $matches[0][$j]);
-                $params = $this->EE->localize->fetch_date_params($matches[2][$j]);
-                $replace = $this->EE->localize->convert_timestamp($params, $query->row('entry_date'), TRUE);
-                $value = str_replace($params, $replace, $matches[2][$j]);
-                $this->EE->TMPL->tagdata = str_replace(LD.$matches[0][$j].RD, $value, $this->EE->TMPL->tagdata);
+                //$matches[0][$j] = str_replace(array(LD,RD), '', $matches[0][$j]);
+                $params = $matches[2][$j];
+                $replace = $this->EE->localize->format_date($params, $query->row('entry_date'), TRUE);
+                //$value = str_replace($params, $replace, $matches[2][$j]);
+                //$this->EE->TMPL->tagdata = str_replace(LD.$matches[0][$j].RD, $value, $this->EE->TMPL->tagdata);
+                $this->EE->TMPL->tagdata = str_replace($matches[0][$j], $replace, $this->EE->TMPL->tagdata);
             }
         }
 
@@ -232,8 +235,12 @@ Class Favrik_nextprev
         {
             $this->EE->TMPL->tagdata = str_replace(LD.'title'.RD, $this->EE->typography->format_characters($query->row('title')), $this->EE->TMPL->tagdata);
         }
+        if (strpos($this->EE->TMPL->tagdata, LD.'author') !== FALSE)
+        {
+            $this->EE->TMPL->tagdata = str_replace(LD.'author'.RD, $this->EE->typography->format_characters($query->row('screen_name')), $this->EE->TMPL->tagdata);
+        }
 
-        return $this->EE->functions->remove_double_slashes(stripslashes($this->EE->TMPL->tagdata));
+        return reduce_double_slashes(stripslashes($this->EE->TMPL->tagdata));
     }
 
     static function usage()
